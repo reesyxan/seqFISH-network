@@ -1,0 +1,338 @@
+---
+title: "data pre-processing"
+author: "Theresa Alexander"
+date: "10/15/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(devtools)
+devtools::install_version(package = 'Seurat', version = package_version('2.3.0'))
+
+library(Seurat)
+
+library(ggvoronoi)
+
+```
+
+
+#get data
+```{r}
+cortex_svz_counts = read.csv("~/Desktop/seqFISH+ project/seqFISH-PLUS-master/sourcedata/cortex_svz_counts.csv")
+cortex_svz_counts = as.data.frame(t(cortex_svz_counts))
+cortex_svz_cellcentroids = read.csv("~/Desktop/seqFISH+ project/seqFISH-PLUS-master/sourcedata/cortex_svz_cellcentroids.csv")
+
+max(cortex_svz_counts["",332])
+
+
+rownames(cortex_svz_counts)[1179]
+
+head(cortex_svz_counts)
+NIH3T3_source_data = read.csv("~/Desktop/seqFISH+ project/seqFISH-PLUS-master/sourcedata/NIH3T3_source_data.csv")
+
+clust0count = sum(cortex@ident == 0)
+clust1count = sum(cortex@ident == 1)
+clust2count = sum(cortex@ident == 2)
+clust3count = sum(cortex@ident == 3)
+clust4count = sum(cortex@ident == 4)
+clust5count = sum(cortex@ident == 5)
+clust6count = sum(cortex@ident == 6)
+clust7count = sum(cortex@ident == 7)
+
+as.numeric(cortex@ident)
+counts = c(clust0count,clust1count,clust2count,clust3count,clust4count,clust5count,clust6count,clust7count)
+hist(as.numeric(cortex@ident), breaks=rep(1:8), main = "Cell Cluster Counts", xlab = "cluster", col = "blue")
+
+
+ob_cellcentroids = read.csv("~/Desktop/seqFISH+ project/seqFISH-PLUS-master/sourcedata/ob_cellcentroids.csv")
+ob_counts = read.csv("~/Desktop/seqFISH+ project/seqFISH-PLUS-master/sourcedata/ob_counts.csv")
+ob_counts = as.data.frame(t(ob_counts))
+```
+
+
+
+#Cortex Seurat object
+
+```{r}
+
+cortex <- CreateSeuratObject(raw.data = cortex_svz_counts, project = "seqfish")
+
+
+cortex <- NormalizeData(object = cortex, normalization.method = "LogNormalize",
+                      scale.factor = 10000)
+
+
+cortex <- FindVariableGenes(object = cortex, mean.function = ExpMean, dispersion.function = LogVMR,
+                          x.low.cutoff = 0.0125, x.high.cutoff = 3, y.cutoff = 0.5)
+
+cortex <- ScaleData(object = cortex)
+
+cortex <- RunPCA(object = cortex, pc.genes = cortex@var.genes, do.print = TRUE, pcs.print = 1:5,
+               genes.print = 5)
+
+cortex = FindClusters(object = cortex, reduction.type = "pca", dims.use = 1:10,
+                      resolution = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,1.0), print.output = 0, save.SNN = TRUE)
+
+cortex_svz_cellcentroids[]
+
+
+
+#tSNE plot
+cortex = Seurat::RunTSNE(cortex)
+TSNEPlot(cortex)
+
+
+#separate cells in cluster 0 from scaled expression matrix
+clust0_data = cortex@scale.data[,cortex@ident == 0]
+
+#PCA on cell by gene matrix 
+PCA_clust0 = prcomp(t(clust0_data))
+
+#get first 10 PC's
+PCs10 = PCA_clust0$x[,1]
+
+#get first 10 eigenvalues
+ev <- PCA_clust0$sdev[1]^2
+
+#get linear combination for sum(eigenvalue_i * PC_i)
+PC_lincombo = PCs10 * ev
+
+#get cell centroid locations for cells in cluster 0
+cortex_svz_cellcentroids_clust0 = as.data.frame(cortex_svz_cellcentroids[cortex@ident == 0,])
+
+#plot voronoi plot colored by PC magnitude
+ggplot(cortex_svz_cellcentroids_clust0 ,aes(cortex_svz_cellcentroids_clust0$X, cortex_svz_cellcentroids_clust0$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = PC_lincombo)) +
+  geom_point() + ggtitle("Magnitude per cell of first 1 PC's for cluster 0 cortex cells")
+
+
+
+exp = clust0_data["Eef1a2",]
+ggplot(cortex_svz_cellcentroids_clust0 ,aes(cortex_svz_cellcentroids_clust0$X, cortex_svz_cellcentroids_clust0$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = exp)) +
+  geom_point() + ggtitle("Magnitude per cell of first 10 PC's for cluster 0 cortex cells")
+
+clust1_data = cortex@scale.data[,cortex@ident == 1]
+PCA_clust1 = prcomp(t(clust1_data))
+
+PCs10 = PCA_clust1$x[,1:1]
+ev <- PCA_clust1$sdev[1:1]^2
+
+#PC_lincombo = rowSums(PCs10 * ev)
+PC_lincombo = PCs10 * ev
+
+cortex_svz_cellcentroids_clust1 = as.data.frame(cortex_svz_cellcentroids[cortex@ident == 1,])
+#plot voronoi plot colored by cell ident
+ggplot(cortex_svz_cellcentroids_clust1 ,aes(cortex_svz_cellcentroids_clust1$X, cortex_svz_cellcentroids_clust1$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = PC_lincombo)) +
+  geom_point() + ggtitle("Magnitude per cell of first 1 PC's for cluster 1 cortex cells")
+
+
+
+clust2_data = cortex@scale.data[,cortex@ident == 2]
+PCA_clust2 = prcomp(t(clust2_data))
+
+PCs10 = PCA_clust2$x[,1:1]
+ev <- PCA_clust2$sdev[1:1]^2
+
+#PC_lincombo = rowSums(PCs10 * ev)
+PC_lincombo = PCs10 * ev
+
+cortex_svz_cellcentroids_clust2 = as.data.frame(cortex_svz_cellcentroids[cortex@ident == 2,])
+#plot voronoi plot colored by cell ident
+ggplot(cortex_svz_cellcentroids_clust2 ,aes(cortex_svz_cellcentroids_clust2$X, cortex_svz_cellcentroids_clust2$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = PC_lincombo)) +
+  geom_point() + ggtitle("Magnitude per cell of first 1 PC's for cluster 2 cortex cells")
+
+
+
+
+clust3_data = cortex@scale.data[,cortex@ident == 3]
+PCA_clust3 = prcomp(t(clust3_data))
+
+PCs10 = PCA_clust3$x[,1:1]
+ev <- PCA_clust3$sdev[1:1]^2
+
+#PC_lincombo = rowSums(PCs10 * ev)
+PC_lincombo = PCs10 * ev
+
+cortex_svz_cellcentroids_clust3 = as.data.frame(cortex_svz_cellcentroids[cortex@ident == 3,])
+#plot voronoi plot colored by cell ident
+ggplot(cortex_svz_cellcentroids_clust3 ,aes(cortex_svz_cellcentroids_clust3$X, cortex_svz_cellcentroids_clust3$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = PC_lincombo)) +
+  geom_point() + ggtitle("Magnitude per cell of first 1 PC's for cluster 3 cortex cells")
+
+
+
+
+clust4_data = cortex@scale.data[,cortex@ident == 4]
+PCA_clust4 = prcomp(t(clust4_data))
+
+PCs10 = PCA_clust4$x[,1:1]
+ev <- PCA_clust4$sdev[1:1]^2
+
+#PC_lincombo = rowSums(PCs10 * ev)
+PC_lincombo = PCs10 * ev
+
+cortex_svz_cellcentroids_clust4 = as.data.frame(cortex_svz_cellcentroids[cortex@ident == 4,])
+#plot voronoi plot colored by cell ident
+ggplot(cortex_svz_cellcentroids_clust4 ,aes(cortex_svz_cellcentroids_clust4$X, cortex_svz_cellcentroids_clust4$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = PC_lincombo)) +
+  geom_point() + ggtitle("Magnitude per cell of first 1 PC's for cluster 4 cortex cells")
+
+
+
+
+
+
+clust5_data = cortex@scale.data[,cortex@ident == 5]
+PCA_clust5 = prcomp(t(clust5_data))
+
+PCs10 = PCA_clust5$x[,1:1]
+ev <- PCA_clust5$sdev[1:1]^2
+
+#PC_lincombo = rowSums(PCs10 * ev)
+PC_lincombo = PCs10 * ev
+
+cortex_svz_cellcentroids_clust5 = as.data.frame(cortex_svz_cellcentroids[cortex@ident == 5,])
+#plot voronoi plot colored by cell ident
+ggplot(cortex_svz_cellcentroids_clust5 ,aes(cortex_svz_cellcentroids_clust5$X, cortex_svz_cellcentroids_clust5$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = PC_lincombo)) +
+  geom_point() + ggtitle("Magnitude per cell of first 1 PC's for cluster 5 cortex cells")
+
+
+
+
+clust6_data = cortex@scale.data[,cortex@ident == 6]
+PCA_clust6 = prcomp(t(clust6_data))
+
+PCs10 = PCA_clust6$x[,1:1]
+ev <- PCA_clust6$sdev[1:1]^2
+
+#PC_lincombo = rowSums(PCs10 * ev)
+PC_lincombo = PCs10 * ev
+
+cortex_svz_cellcentroids_clust6 = as.data.frame(cortex_svz_cellcentroids[cortex@ident == 6,])
+#plot voronoi plot colored by cell ident
+ggplot(cortex_svz_cellcentroids_clust6 ,aes(cortex_svz_cellcentroids_clust6$X, cortex_svz_cellcentroids_clust6$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = PC_lincombo)) +
+  geom_point() + ggtitle("Magnitude per cell of first 1 PC's for cluster 6 cortex cells")
+
+
+
+
+clust7_data = cortex@scale.data[,cortex@ident == 7]
+PCA_clust7 = prcomp(t(clust7_data))
+
+PCs10 = PCA_clust7$x[,1:1]
+ev <- PCA_clust7$sdev[1:1]^2
+
+#PC_lincombo = rowSums(PCs10 * ev)
+PC_lincombo = PCs10 * ev
+
+cortex_svz_cellcentroids_clust7 = as.data.frame(cortex_svz_cellcentroids[cortex@ident == 7,])
+#plot voronoi plot colored by cell ident
+ggplot(cortex_svz_cellcentroids_clust7 ,aes(cortex_svz_cellcentroids_clust7$X, cortex_svz_cellcentroids_clust7$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = PC_lincombo)) +
+  geom_point() + ggtitle("Magnitude per cell of first 1 PC's for cluster 7 cortex cells")
+
+
+```
+
+
+#OB Seurat object
+
+```{r}
+
+ob <- CreateSeuratObject(raw.data = ob_counts, project = "seqfish")
+
+
+ob <- NormalizeData(object = ob, normalization.method = "LogNormalize",
+                      scale.factor = 10000)
+
+
+ob <- FindVariableGenes(object = ob, mean.function = ExpMean, dispersion.function = LogVMR,
+                          x.low.cutoff = 0.0125, x.high.cutoff = 3, y.cutoff = 0.5)
+
+ob <- ScaleData(object = ob)
+
+ob <- RunPCA(object = ob, pc.genes = cortex@var.genes, do.print = TRUE, pcs.print = 1:5,
+               genes.print = 5)
+
+ob = FindClusters(object = ob, reduction.type = "pca", dims.use = 1:10,
+                      resolution = c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,1.0), print.output = 0, save.SNN = TRUE)
+
+
+#tSNE plot
+ob = Seurat::RunTSNE(ob)
+TSNEPlot(ob)
+
+write.csv(ob@ident, file = "~/Desktop/seqFISH+ project/obclusters_res1.csv")
+#plot voronoi plot colored by cell ident
+ggplot(ob_cellcentroids,aes(ob_cellcentroids$X,ob_cellcentroids$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = ob@ident)) +
+  geom_point()
+```
+
+
+
+
+
+#Diff Exp Cortex
+
+```{r}
+cortexmarkers_clust0 = FindMarkers(cortex, ident.1 = 0, min.pct = 0.25, test.use = "MAST")
+cortexmarkers_clust1 = FindMarkers(cortex, ident.1 = 1, min.pct = 0.25, test.use = "MAST")
+cortexmarkers_clust2 = FindMarkers(cortex, ident.1 = 2, min.pct = 0.25, test.use = "MAST")
+cortexmarkers_clust3 = FindMarkers(cortex, ident.1 = 3, min.pct = 0.25, test.use = "MAST")
+cortexmarkers_clust4 = FindMarkers(cortex, ident.1 = 4, min.pct = 0.25, test.use = "MAST")
+cortexmarkers_clust5 = FindMarkers(cortex, ident.1 = 5, min.pct = 0.25, test.use = "MAST")
+cortexmarkers_clust6 = head(FindMarkers(cortex, ident.1 = 6, min.pct = 0.25, test.use = "MAST"),15)
+cortexmarkers_clust7 = FindMarkers(cortex, ident.1 = 7, min.pct = 0.25, test.use = "MAST")
+
+
+dim(cortexmarkers_clust1)
+head(cortexmarkers_clust4)
+#
+#cluster 4 = mycroglia
+#cluster 5 = 
+#cluster 6 = 
+#cluster 7 = oligodendrocytes
+cortexmarkers_clust0["Tie2",]
+```
+
+
+
+
+#Diff Exp Cortex
+```{r}
+obmarkers_clust0 = head(FindMarkers(ob, ident.1 = 0, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust1 = head(FindMarkers(ob, ident.1 = 1, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust2 = head(FindMarkers(ob, ident.1 = 2, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust3 = head(FindMarkers(ob, ident.1 = 3, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust4 = head(FindMarkers(ob, ident.1 = 4, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust5 = head(FindMarkers(ob, ident.1 = 5, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust6 = head(FindMarkers(ob, ident.1 = 6, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust7 = head(FindMarkers(ob, ident.1 = 7, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust8 = head(FindMarkers(ob, ident.1 = 8, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust9 = head(FindMarkers(ob, ident.1 = 5, min.pct = 0.25, test.use = "MAST"),15)
+obmarkers_clust10 = head(FindMarkers(ob, ident.1 = 6, min.pct = 0.25, test.use = "MAST"),15)
+
+obmarkers_clust0["GJA1",]
+write.csv(obmarkers_clust10, file = "~/Desktop/seqFISH+ project/clust_MASTmarkers/ob/clust10.csv")
+```
+
+
+
+#color voronoi plot by differentially expressed markers
+```{r}
+#plot voronoi plot colored by cell ident
+ggplot(ob_cellcentroids,aes(ob_cellcentroids$X,ob_cellcentroids$Y)) +
+  stat_voronoi(geom="polygon", aes(fill = ob@scale.data["Gja1",])) +ggtitle("OB cells colored by Gja1, marker for cluster 0") 
+
+
+ob@scale.data["Gja1",]
+```
+
